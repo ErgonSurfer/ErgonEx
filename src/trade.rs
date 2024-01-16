@@ -66,7 +66,7 @@ fn option_str(s: &Option<String>) -> &str {
 }
 
 pub async fn create_trade_interactive(wallet: &Wallet) -> Result<(), Box<dyn std::error::Error>> {
-    let (tx_build, balance) = wallet.init_transaction(None, None).await?;
+    let (tx_build, balance, _balance_token) = wallet.init_transaction(None, None, None).await?;
     if balance < 1000 {
         println!("{}", format!("Your balance ({}) is too low.", balance).red());
         println!("{}", "You need at least 1000 ergoshis to access trading.".red());
@@ -160,7 +160,7 @@ pub async fn create_trade_interactive(wallet: &Wallet) -> Result<(), Box<dyn std
 
 
     // Prompt for buy amount
-    print!("Enter the amount of {} you want to receive (1 ergoshi = 0.00000001 XRG): ", "ergoshis".bright_cyan());
+    print!("Enter the amount of {} you want to receive (1 ergoshi = 0.00000001 ⵟ): ", "ergoshis".bright_cyan());
     io::stdout().flush()?;
     let buy_amount_str: String = read!("{}\n");
     let buy_amount_str = buy_amount_str.trim();
@@ -295,7 +295,7 @@ async fn confirm_trade_interactive(wallet: &Wallet,
     println!("{}", "Let's first fund the disposable wallet with some ergoshis for fees".bright_green());
 
     // Initialize the transaction builder and get the current wallet balance
-    let (mut funding_tx_build, balance) = wallet.init_transaction(None, None).await?;
+    let (mut funding_tx_build, balance, _balance_token) = wallet.init_transaction(None, None, None).await?;
     //println!("Balance is: {}", balance);
     let refund_fees = 142;
 
@@ -348,8 +348,13 @@ async fn confirm_trade_interactive(wallet: &Wallet,
         // Proceed with the refund process
         println!("Token ID or value does not match. Preparing to refund the transaction on wallet {} to save your funds", cash_address);
         println!("Let's send back the tokens to their owner");
+        let received_token_id_bytes = hex::decode(received_token_id_str.clone())
+            .map_err(|e| format!("Failed to decode hex: {}", e))?;
 
-        let (mut refund_tx_build, balance) = wallet.init_transaction(Some(temp_address.clone()), Some(temp_secret_key)).await?;
+        let (mut refund_tx_build, balance, _balance_token) = wallet
+            .init_transaction(Some(temp_address.clone()), Some(temp_secret_key), Some(received_token_id_bytes))
+            .await?;
+    
 
         let mut token_id = [0; 32];
         token_id.copy_from_slice(&hex::decode(&received_token_id_str)?);
@@ -409,8 +414,8 @@ async fn confirm_trade_interactive(wallet: &Wallet,
     sleep(Duration::from_secs(2)).await;
 
 
-    let (mut lock_tx_build, balance) = wallet.init_transaction(Some(temp_address.clone()), Some(temp_secret_key)).await?;
-    //println!("Temp wallet balance is: {}", balance);
+    let token_id_vec = Vec::from(token_id);
+    let (mut lock_tx_build, balance, _balance_token) = wallet.init_transaction(Some(temp_address.clone()), Some(temp_secret_key), Some(token_id_vec)).await?;   
 
     let output = EnforceOutputsOutput {
         value: 5,  // ignored for script hash generation
@@ -490,7 +495,7 @@ async fn confirm_trade_interactive(wallet: &Wallet,
     println!("Locking transaction sent with ID: {}", lock_result);
     sleep(Duration::from_secs(2)).await;
 
-    let (mut listing_tx_build, balance) = wallet.init_transaction(None, None).await?;
+    let (mut listing_tx_build, balance, _balance_token) = wallet.init_transaction(None, None, None).await?;
     //println!("Balance is: {}", balance);
     
     // Decode the hexadecimal string into a byte array
@@ -568,7 +573,7 @@ async fn confirm_trade_interactive(wallet: &Wallet,
 }
 
 pub async fn accept_trades_interactive(wallet: &Wallet,  token_symbol: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let (_tx_build, balance) = wallet.init_transaction(None, None).await?;
+    let (_tx_build, balance, _balance_token) = wallet.init_transaction(None, None, None).await?;
     if balance < 1000 {
         println!("Your balance ({}) is too low.", balance);
         println!("You need at least 1000 ergoshis to access trading.");
@@ -766,7 +771,7 @@ pub async fn accept_trades_interactive(wallet: &Wallet,  token_symbol: Option<St
 
     // Now the valid_trades vector is sorted by price
 
-    let (mut tx_build, balance) = wallet.init_transaction(None, None).await?;
+    let (mut tx_build, balance, _balance_token) = wallet.init_transaction(None, None, None).await?;
     println!("Your balance: {} ergoshis", balance);
     println!("Current trade offers:");
     println!("{:^3} | {:^15} | {:^14} | {:^10} | {:^32} |", 

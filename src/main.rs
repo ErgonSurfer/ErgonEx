@@ -19,6 +19,7 @@ use std::io::{self, Write, Read};
 use text_io::{read};
 use std::env;
 use colored::*;
+use crate::wallet::Wallet;
 
 
 
@@ -51,20 +52,22 @@ fn ensure_wallet_interactive() -> Result<wallet::Wallet, Box<dyn std::error::Err
     }
 }
 
-async fn show_balance(w: &wallet::Wallet) -> Result<(), Box<dyn std::error::Error>> {
-    let balance = w.get_balance().await?;
-    
-    println!("Your wallet's balance is: {} ergoshis or {} XRG.",
-             balance,
-             balance as f64 / 100_000_000.0);
+async fn show_balance(w: &Wallet) -> Result<(), Box<dyn std::error::Error>> {
+    // Call the modified get_balance function
+    w.get_balance().await?;
+
+    // Display wallet address
     println!("Your wallet's address is: {}", w.address().cash_addr());
+    // Assuming display_qr function is available and working
     display_qr::display(w.address().cash_addr().as_bytes());
 
     Ok(())
 }
 
+
+
 async fn do_transaction(w: &wallet::Wallet) -> Result<(), Box<dyn std::error::Error>> {
-    let (mut tx_build, balance) = w.init_transaction(None, None).await?;
+    let (mut tx_build, balance, _balance_token) = w.init_transaction(None, None, None).await?;
     println!("Your wallet's balance is: {} ergoshis or {} XRG.",
              balance,
              balance as f64 / 100_000_000.0);
@@ -150,7 +153,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", "---------------------------------".blue().bold());
         println!("{}", "Select an option from below:".bright_green().bold());
         println!("{}", "1: Show wallet balance / fund wallet".bright_cyan());
-        println!("{}", "2: Send XRG from this wallet to an address".bright_cyan());
+//        println!("{}", "2: Send XRG from this wallet to an address".bright_cyan());
+        println!("{}", "2: Send XRG/tokens from this wallet to an address".bright_cyan());
         println!("{}", "3: Create a new trade for a token on the Ergon blockchain".bright_cyan());
         println!("{}", "4: List all available token trades on the Ergon blockchain".bright_cyan());
         println!("{}", "5: List trades for a specific token symbol".bright_cyan());
@@ -160,7 +164,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let choice: String = read!("{}\n");
         match choice.trim() {
             "1" => show_balance(&wallet).await?,
-            "2" => do_transaction(&wallet).await?,
+            //"2" => do_transaction(&wallet).await?,
+            "2" => wallet.get_balance_and_select_asset().await?,
             "3" => trade::create_trade_interactive(&wallet).await?,
             "4" => trade::accept_trades_interactive(&wallet, None).await?,
             "5" => {
