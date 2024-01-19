@@ -477,7 +477,7 @@ impl Wallet {
             // Now pass it as an Option<Vec<u8>>
             let (mut tx_build, balance, balance_token) = self.init_transaction(None, None, Some(token_id_vec)).await?;
                         
-            //println!("Your wallet's XRG balance is: {} ergoshis or {} ⵟ.",
+            println!("Your wallet's XRG balance is: {} ergoshis or {} ⵟ.",
                     balance,
                     balance as f64 / 100_000_000.0);
             if balance < self.dust_amount() {
