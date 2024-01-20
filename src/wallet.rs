@@ -219,7 +219,6 @@ impl Wallet {
             tokio::time::sleep(std::time::Duration::new(1, 0)).await;
         }
     }
-    
     pub async fn init_transaction(&self, temp_address: Option<Address>, temp_secret_key: Option<SecretKey>, selected_token_id: Option<Vec<u8>>) -> Result<(IncompleteTx, u64, u64), Box<dyn std::error::Error>> {
         let address_to_use = temp_address.unwrap_or_else(|| self.address.clone());
         let key_to_use = temp_secret_key.unwrap_or_else(|| self.secret_key.clone());
@@ -311,10 +310,9 @@ impl Wallet {
         }
         
         Ok((tx_build, balance, balance_token))
-    }        
-    
+        
+    }
             
-    
 
     pub async fn get_balance_and_select_asset(&self) -> Result<(), Box<dyn std::error::Error>> {
         let utxos = self.get_utxos(&self.address).await?;
@@ -445,12 +443,12 @@ impl Wallet {
                 address: self.address().clone(),
             };
             let back_to_wallet_idx = tx_build.add_output(&output_back_to_wallet);
-            let send_back_to_wallet_amount = if balance < send_amount + 10 {
-                output_send.value = balance - 10;
+            let send_back_to_wallet_amount = if balance < send_amount + 20 {
+                output_send.value = balance - 20;
                 tx_build.replace_output(send_idx, &output_send);
                 0
             } else {
-                balance - (send_amount + 10)
+                balance - (send_amount + 20)
             };
             if send_back_to_wallet_amount < self.dust_amount() {
                 tx_build.remove_output(back_to_wallet_idx);
@@ -458,7 +456,10 @@ impl Wallet {
                 output_back_to_wallet.value = send_back_to_wallet_amount;
                 tx_build.replace_output(back_to_wallet_idx, &output_back_to_wallet);
             }
+            //println!("Output back value : {:?}", output_back_to_wallet.value);
+
             let tx = tx_build.sign();
+            //println!("Transaction hex : {:?}", tx);
             let response = self.send_tx(&tx).await?; // Use await here
             println!("Sent transaction. Transaction ID is: {}", response);
         
