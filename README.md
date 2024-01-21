@@ -20,7 +20,7 @@ Ergonex leverages the capabilities of the Ergon blockchain and is powered by the
 
 ## Installation 
 
-#### Using the Provided Binaries:
+### Using the Provided Binaries:
 
 If you prefer to use the pre-built binaries for Linux and macOS, follow these steps:
 
