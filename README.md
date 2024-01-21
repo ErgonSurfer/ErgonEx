@@ -18,59 +18,7 @@ Ergonex leverages the capabilities of the Ergon blockchain and is powered by the
 - **Integration with Chronik Indexer:** Ergonex is powered by the amazing Chronik Indexer, providing real-time access to Ergon blockchain data.
 - **Multi-Platform Support:** Ergonex is available as a cross-platform tool, with binaries for Linux and macOS.
 
-## Installation
-
-### Installing Rust and Cargo
-
-Before running Ergonex, you'll need Rust and Cargo installed on your system. Follow these steps to install them:
-
-#### Linux:
-
-1. Open a terminal window.
-
-2. Run the following command to install Rust and Cargo:
-
-   ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-3. Follow the on-screen instructions to complete the installation.
-
-#### macOS:
-
-
-1. Open a terminal window.
-
-2. Install Homebrew (if not already installed):
-
-   ```bash
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
-
-3. Install Rust and Cargo using Homebrew:
-
-   ```bash
-    brew install rust
-
-
-## Building and Running Ergonex
-
-After installing Rust and Cargo, you can build and run Ergonex using the following steps:
-
-1. Clone this repository to your local machine:
-
-   ```bash
-   git clone https://github.com/ErgonSurfer/ergonex.git
-   cd ergonex
-
-2. Build Ergonex:
-
-   ```bash
-    cargo build --release
-
-3. Run Ergonex:
-
-   ```bash
-    cargo run --release
-    
+## Installation 
 
 #### Using the Provided Binaries:
 
@@ -101,6 +49,58 @@ If you prefer to use the pre-built binaries for Linux and macOS, follow these st
 4. Right-click on Ergonex and choose "Open." (Note: The DMG is not notarized, so you may need to bypass macOS security settings.)
 
 5. Run Ergonex from the Applications folder.
+
+### Building from source
+
+Before running Ergonex, you'll need Rust and Cargo installed on your system. Follow these steps to install them:
+
+#### Linux:
+
+1. Open a terminal window.
+
+2. Run the following command to install Rust and Cargo:
+
+   ```bash
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+3. Follow the on-screen instructions to complete the installation.
+
+#### macOS:
+
+
+1. Open a terminal window.
+
+2. Install Homebrew (if not already installed):
+
+   ```bash
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+
+3. Install Rust and Cargo using Homebrew:
+
+   ```bash
+    brew install rust
+
+
+#### Building and Running Ergonex
+
+After installing Rust and Cargo, you can build and run Ergonex using the following steps:
+
+1. Clone this repository to your local machine:
+
+   ```bash
+   git clone https://github.com/ErgonSurfer/ergonex.git
+   cd ergonex
+
+2. Build Ergonex:
+
+   ```bash
+    cargo build --release
+
+3. Run Ergonex:
+
+   ```bash
+    cargo run --release
+    
 
 
 
