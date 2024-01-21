@@ -21,6 +21,7 @@ use rand::RngCore;
 use secp256k1::{Secp256k1, PublicKey, SecretKey};
 use num_format::{Locale, ToFormattedString};
 use text_io::{read};
+use tokio::time::{sleep, Duration};
 use hex;
 
 
@@ -122,8 +123,16 @@ impl Wallet {
         let script_utxos: ScriptUtxos = prost::Message::decode(script_bytes).unwrap();
         //println!("script_utxos: {:?}", script_utxos);
         // Access the list of ScriptUtxo messages from script_utxos
-        let utxos: Vec<bitcoinsuite_chronik_client::proto::Utxo> = script_utxos.utxos;
+        let mut utxos: Vec<bitcoinsuite_chronik_client::proto::Utxo> = script_utxos.utxos;
         //println!("utxos: {:?}", utxos);
+
+        // Sort the UTXOs so that SLP UTXOs come first
+        utxos.sort_by(|a, b| {
+            let a_is_slp = a.slp_token.is_some();
+            let b_is_slp = b.slp_token.is_some();
+            b_is_slp.cmp(&a_is_slp) // This will put SLP UTXOs before non-SLP UTXOs
+        });
+
 
         Ok(utxos)
     }
@@ -152,9 +161,8 @@ impl Wallet {
         println!("XRG Balance: {} ergoshis (≈ {:0.8} ⵟ )", 
                  xrg_balance.to_formatted_string(&Locale::en), 
                  xrg_balance as f64 / 1_000_000_000_f64);
-        
-        println!("\nTokens:");
-        println!("-------");    
+    
+        println!("--------------");    
         for (token_id, amount) in token_balances {
             let token_id_hash = Sha256d::from_slice(&token_id)?;
             let byte_slice = token_id_hash.as_ref();
@@ -164,6 +172,9 @@ impl Wallet {
             let token_info = self.fetch_token(&reversed_token_id_hash).await?;
         
             if let Some(slp_tx_data) = &token_info.slp_tx_data {
+
+                println!("\nTokens:");
+                println!("-------"); 
                 if let Some(genesis_info) = &slp_tx_data.genesis_info {
                     let token_symbol = String::from_utf8(genesis_info.token_ticker.clone()).unwrap_or_default();
                     let token_name = String::from_utf8(genesis_info.token_name.clone()).unwrap_or_default();
@@ -219,68 +230,43 @@ impl Wallet {
             tokio::time::sleep(std::time::Duration::new(1, 0)).await;
         }
     }
+    
     pub async fn init_transaction(&self, temp_address: Option<Address>, temp_secret_key: Option<SecretKey>, selected_token_id: Option<Vec<u8>>) -> Result<(IncompleteTx, u64, u64), Box<dyn std::error::Error>> {
         let address_to_use = temp_address.unwrap_or_else(|| self.address.clone());
         let key_to_use = temp_secret_key.unwrap_or_else(|| self.secret_key.clone());
     
         let mut tx_build = IncompleteTx::new_simple();
         let mut balance = 0;
-        let mut balance_token = 0; // Variable to track the token balance
+        let mut balance_token = 0;
     
         let utxos = self.get_utxos(&address_to_use).await?;
     
         for utxo in utxos.iter() {
-            let is_token_utxo = selected_token_id.as_ref().map_or(false, |token_id| {
+            let is_slp_utxo = utxo.slp_token.is_some();
+            let matches_selected_token = selected_token_id.as_ref().map_or(false, |token_id| {
                 utxo.slp_meta.as_ref().map_or(false, |slp_meta| slp_meta.token_id == *token_id)
             });
+
+            // Filter out non-SLP UTXOs with SLP metadata and output idx of 1 or 2 only when a token ID is given
+            if selected_token_id.is_some() && utxo.slp_meta.is_some() && !is_slp_utxo && (utxo.outpoint.as_ref().map_or(false, |outpoint| outpoint.out_idx == 1 || outpoint.out_idx == 2)) {
+                continue;
+            }
     
-            // Add all non-SLP UTXOs to the transaction
-            if utxo.slp_token.is_none() {
+            // Add non-SLP UTXOs or SLP UTXOs that match the selected token ID
+            if !is_slp_utxo || matches_selected_token {
                 balance += utxo.value as u64;
     
-                let tx_hash_bytes = match utxo.outpoint.as_ref() {
-                    Some(outpoint) => outpoint.txid.clone(),
-                    None => return Err("Outpoint is None".into()),
-                };
-    
-                let tx_hash_array = if tx_hash_bytes.len() == 32 {
-                    let mut array = [0u8; 32];
-                    array.copy_from_slice(&tx_hash_bytes);
-                    array
-                } else {
-                    return Err("Invalid tx_hash_bytes length".into());
-                };
-    
-                let output_idx = match utxo.outpoint.as_ref() {
-                    Some(outpoint) => outpoint.out_idx,
-                    None => return Err("Outpoint is None".into()),
-                };
-    
-                tx_build.add_utxo(Utxo {
-                    key: key_to_use.clone(),
-                    output: Box::new(P2PKHOutput {
-                        address: address_to_use.clone(),
-                        value: utxo.value as u64,
-                    }),
-                    outpoint: TxOutpoint {
-                        tx_hash: tx_hash_array,
-                        output_idx: output_idx,
-                    },
-                    sequence: 0xffff_ffff,
-                });
-            }
-        
-            // If a specific token ID is specified, add token balance and corresponding UTXOs
-            if is_token_utxo {
-                if let Some(slp_token) = &utxo.slp_token {
-                    balance_token += slp_token.amount;
+                if matches_selected_token {
+                    if let Some(slp_token) = &utxo.slp_token {
+                        balance_token += slp_token.amount;
+                    }
                 }
-        
+    
                 let tx_hash_bytes = match utxo.outpoint.as_ref() {
                     Some(outpoint) => outpoint.txid.clone(),
                     None => return Err("Outpoint is None".into()),
                 };
-        
+    
                 let tx_hash_array = if tx_hash_bytes.len() == 32 {
                     let mut array = [0u8; 32];
                     array.copy_from_slice(&tx_hash_bytes);
@@ -288,12 +274,12 @@ impl Wallet {
                 } else {
                     return Err("Invalid tx_hash_bytes length".into());
                 };
-        
+    
                 let output_idx = match utxo.outpoint.as_ref() {
                     Some(outpoint) => outpoint.out_idx,
                     None => return Err("Outpoint is None".into()),
                 };
-        
+
                 tx_build.add_utxo(Utxo {
                     key: key_to_use.clone(),
                     output: Box::new(P2PKHOutput {
@@ -308,10 +294,10 @@ impl Wallet {
                 });
             }
         }
-        
+    
         Ok((tx_build, balance, balance_token))
-        
     }
+
             
 
     pub async fn get_balance_and_select_asset(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -337,11 +323,12 @@ impl Wallet {
         println!("XRG Balance: {} ergoshis (≈ {:0.8} ⵟ )", 
                 xrg_balance.to_formatted_string(&Locale::en), 
                 xrg_balance as f64 / 1_000_000_000_f64);
+
+        println!("--------------"); 
+
         
         let mut token_info_vector: Vec<TokenInfo> = Vec::new();
-
-        println!("\nTokens:");
-        println!("-------");    
+   
         for (token_id, amount) in &token_balances {
             let token_id_hash = Sha256d::from_slice(&token_id)?;
             let byte_slice = token_id_hash.as_ref();
@@ -352,6 +339,9 @@ impl Wallet {
             //println!("Token Info: {:#?}", token_info);
 
             if let Some(slp_tx_data) = &token_info.slp_tx_data {
+
+                println!("\nTokens:");
+                println!("-------"); 
                 if let Some(genesis_info) = &slp_tx_data.genesis_info {
                     let token_symbol = String::from_utf8(genesis_info.token_ticker.clone()).unwrap_or_default();
                     let token_name = String::from_utf8(genesis_info.token_name.clone()).unwrap_or_default();
@@ -443,12 +433,12 @@ impl Wallet {
                 address: self.address().clone(),
             };
             let back_to_wallet_idx = tx_build.add_output(&output_back_to_wallet);
-            let send_back_to_wallet_amount = if balance < send_amount + 20 {
-                output_send.value = balance - 20;
+            let send_back_to_wallet_amount = if balance < send_amount + 10 {
+                output_send.value = balance - 10;
                 tx_build.replace_output(send_idx, &output_send);
                 0
             } else {
-                balance - (send_amount + 20)
+                balance - (send_amount + 10)
             };
             if send_back_to_wallet_amount < self.dust_amount() {
                 tx_build.remove_output(back_to_wallet_idx);
@@ -457,6 +447,7 @@ impl Wallet {
                 tx_build.replace_output(back_to_wallet_idx, &output_back_to_wallet);
             }
             //println!("Output back value : {:?}", output_back_to_wallet.value);
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
             let tx = tx_build.sign();
             //println!("Transaction hex : {:?}", tx);
@@ -476,7 +467,7 @@ impl Wallet {
                 .map_err(|e| format!("Failed to decode hex: {}", e))?;
 
             // Now pass it as an Option<Vec<u8>>
-            let (mut tx_build, balance, balance_token) = self.init_transaction(None, None, Some(token_id_vec)).await?;
+            let (mut token_tx_build, balance, balance_token) = self.init_transaction(None, None, Some(token_id_vec)).await?;
                         
             println!("Your wallet's XRG balance is: {} ergoshis or {} ⵟ.",
                     balance,
@@ -487,9 +478,15 @@ impl Wallet {
                 return Ok(());
             }
 
+            println!("Token Balance: {:?}", balance_token);
+
+
+            let balance_token_display = balance_token as f64 / 10f64.powi(selected_token_id_decimals as i32);
+
             println!("Your wallet's balance is: {} {}", 
+                balance_token_display,
                 selected_token_symbol, 
-                balance_token as f64 / 10f64.powi(selected_token_id_decimals as i32));
+                );
         
             print!("Enter the address to send to: ");
             io::stdout().flush()?;
@@ -511,15 +508,17 @@ impl Wallet {
             io::stdout().flush()?;
             let send_amount_str: String = read!("{}\n");
             let send_amount_str = send_amount_str.trim();
+            //println!("Send amount string: {:?}", send_amount_str);
+            //println!("Selected token decimal: {:?}", selected_token_id_decimals);
             
-            let send_amount: u64 = if send_amount_str == "all" {
-                // If "all", get the token balance in sats
-                (selected_token_id_amount as u64 * 10u64.pow(selected_token_id_decimals as u32)) as u64
+            let send_amount_sats: u64 = if send_amount_str == "all" {
+                // If "all", use the entire token balance in sats
+                balance_token
             } else {
-                // If a specific amount is entered, parse it as u64
+                // If a specific amount is entered, parse it and convert to sats
                 match send_amount_str.parse::<f64>() {
                     Ok(amount) => {
-                        // Convert the amount to sats using token decimals
+                        // Convert the entered amount to sats using token decimals
                         (amount * 10f64.powi(selected_token_id_decimals as i32)) as u64
                     }
                     Err(_) => {
@@ -528,16 +527,15 @@ impl Wallet {
                     }
                 }
             };
-        
-
-            let token_id_vec = hex::decode(&selected_token_info.token_id_hex)?;
-            let total_token_balance = token_balances.get(&token_id_vec).unwrap_or(&0);
             
-            let token_change = total_token_balance.checked_sub(send_amount).unwrap_or(0);
+            //println!("Send amount in sats: {:?}", send_amount_sats);
+
+            let token_id_vec = hex::decode(&selected_token_info.token_id_hex)?;            
+            let token_change = balance_token - send_amount_sats;
 
             // Construct the output_quantities vector
             let output_quantities = vec![
-                send_amount,
+                send_amount_sats,
                 token_change,
             ];
 
@@ -561,27 +559,27 @@ impl Wallet {
             if let Some(slp_output) = output_slp {
 
                 
-                tx_build.add_output(&slp_output);
+                token_tx_build.add_output(&slp_output);
 
                 let output_send = outputs::P2PKHOutput {
                     value: 5,
                     address: receiving_addr,
                 };
 
-                tx_build.add_output(&output_send);
+                token_tx_build.add_output(&output_send);
 
                 let output_token_change = outputs::P2PKHOutput {
                     value: 5,
                     address: self.address().clone(),
                 };
 
-                tx_build.add_output(&output_token_change);
+                token_tx_build.add_output(&output_token_change);
 
                 let mut output_back_to_wallet = outputs::P2PKHOutput {
                     value: 0,
                     address: self.address().clone(),
                 };
-                let back_to_wallet_idx = tx_build.add_output(&output_back_to_wallet);
+                let back_to_wallet_idx = token_tx_build.add_output(&output_back_to_wallet);
 
                 let fee = 10;
                 let total_spent = slp_output.value() +
@@ -590,9 +588,9 @@ impl Wallet {
                                 fee;
             
                 output_back_to_wallet.value = balance - total_spent;
-                tx_build.replace_output(back_to_wallet_idx, &output_back_to_wallet);
-                let tx = tx_build.sign();
-                let response = self.send_tx(&tx).await?; // Use await here
+                token_tx_build.replace_output(back_to_wallet_idx, &output_back_to_wallet);
+                let token_tx = token_tx_build.sign();
+                let response = self.send_tx(&token_tx).await?; // Use await here
                 println!("Sent transaction. Transaction ID is: {}", response);
                 
                 Ok(())
@@ -614,6 +612,7 @@ impl Wallet {
         // Serialize the transaction
         let mut tx_ser = Vec::new();
         tx.write_to_stream(&mut tx_ser)?;
+
     
         // Encode the serialized transaction in hexadecimal format
         let tx_hex = hex::encode(&tx_ser);
