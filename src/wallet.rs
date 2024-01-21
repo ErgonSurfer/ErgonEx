@@ -21,7 +21,6 @@ use rand::RngCore;
 use secp256k1::{Secp256k1, PublicKey, SecretKey};
 use num_format::{Locale, ToFormattedString};
 use text_io::{read};
-use tokio::time::{sleep, Duration};
 use hex;
 
 
@@ -460,7 +459,7 @@ impl Wallet {
             let selected_token_symbol = &selected_token_info.token_symbol;
             let selected_token_id_hex = &selected_token_info.token_id_hex;
             let selected_token_id_decimals = selected_token_info.decimals;
-            let selected_token_id_amount = selected_token_info.amount;
+            let _selected_token_id_amount = selected_token_info.amount;
     
             // Convert the hex string to Vec<u8>
             let token_id_vec = hex::decode(selected_token_id_hex)
@@ -477,8 +476,6 @@ impl Wallet {
                         XRG to your wallet's address: {}", balance, self.address().cash_addr());
                 return Ok(());
             }
-
-            println!("Token Balance: {:?}", balance_token);
 
 
             let balance_token_display = balance_token as f64 / 10f64.powi(selected_token_id_decimals as i32);
@@ -557,8 +554,6 @@ impl Wallet {
 
             // Use output_slp after checking it's Some
             if let Some(slp_output) = output_slp {
-
-                
                 token_tx_build.add_output(&slp_output);
 
                 let output_send = outputs::P2PKHOutput {
