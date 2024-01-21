@@ -58,7 +58,7 @@ After installing Rust and Cargo, you can build and run Ergonex using the followi
 1. Clone this repository to your local machine:
 
    ```bash
-   git clone https://github.com/your-username/ergonex.git
+   git clone https://github.com/ErgonSurfer/ergonex.git
    cd ergonex
 
 2. Build Ergonex:
