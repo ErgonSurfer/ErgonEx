@@ -24,6 +24,13 @@ Ergonex leverages the capabilities of the Ergon blockchain and is powered by the
 
 If you prefer to use the pre-built binaries for Linux and macOS, follow these steps:
 
+#### Windows 
+
+1. Download ergonex-windows.exe from the repo.
+
+2. Open the file and run Ergonex.
+
+
 #### Linux
 
 1. Download the Linux binary from the repo.
