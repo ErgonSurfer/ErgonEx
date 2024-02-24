@@ -14,7 +14,9 @@ use futures::stream::{self, StreamExt};
 use std::cmp::Ordering;
 use tokio::time::{sleep, Duration};
 use colored::*;
-
+use reqwest;
+use serde_json::Value;
+use hex;
 
 
 
@@ -63,6 +65,16 @@ async fn fetch_tokens(ids: &[&str]) -> Result<Vec<TokenEntry>, Box<dyn std::erro
 
 fn option_str(s: &Option<String>) -> &str {
     s.as_ref().map(|x| x.as_str()).unwrap_or("<empty>")
+}
+
+async fn fetch_trade_data() -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+    let resp = reqwest::get("https://api.calory.money/exchanges")
+        .await?
+        .text()
+        .await?;
+
+    let trades: Vec<Value> = serde_json::from_str(&resp)?;
+    Ok(trades)
 }
 
 pub async fn create_trade_interactive(wallet: &Wallet) -> Result<(), Box<dyn std::error::Error>> {
@@ -544,7 +556,7 @@ async fn confirm_trade_interactive(wallet: &Wallet,
     };
 
     let signal_output = P2PKHOutput {
-        value: 5,
+        value: 5,   
         address: signal_address.clone(),
     };
     listing_tx_build.add_output(&signal_output);
@@ -585,7 +597,37 @@ pub async fn accept_trades_interactive(wallet: &Wallet,  token_symbol: Option<St
     let signal_address_str = "ergon:qph2jxmrk2uswgvfdjeld32hrxjpxz8nyyy248su37";
     let signal_address = Address::from_cash_addr(signal_address_str.to_string())
         .expect("Invalid address");
-    let signal_address_utxos = wallet.get_utxos(&signal_address).await?;
+
+    // Attempt to fetch trade data from the API
+    let api_trades_result = fetch_trade_data().await;
+
+    let mut signal_address_utxos = wallet.get_utxos(&signal_address).await?;
+
+    // Check if the API call was successful
+    match api_trades_result {
+        Ok(api_trades) => {
+            // Extract txids of completed trades
+            let completed_trades_txids: HashSet<String> = api_trades.iter()
+                .filter(|trade| trade["status"].as_str() == Some("completed"))
+                .map(|trade| trade["txid"].as_str().unwrap_or_default().to_string())
+                .collect();
+
+            // Filter out UTXOs with completed trades
+            signal_address_utxos.retain(|utxo| {
+                if let Some(ref outpoint) = utxo.outpoint {
+                    let reversed_txid: Vec<u8> = outpoint.txid.iter().rev().cloned().collect();
+                    let txid_hex = hex::encode(&reversed_txid);
+                    !completed_trades_txids.contains(&txid_hex)
+                } else {
+                    true 
+                }
+            });
+        }
+        Err(e) => {
+            // If the API call failed, log the error and continue with the original UTXOs
+            eprintln!("Error fetching trade data from API. Confirmation of trade status will take a little longer : {:?}", e);
+        }
+    }
 
     // Create a vector to store TradeOfferOutputs
     let mut trades: Vec<TradeOfferOutput> = Vec::new();
